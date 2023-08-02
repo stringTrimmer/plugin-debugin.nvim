@@ -1,6 +1,6 @@
 local a = vim.api
 -- a.nvim_echo({ { 'hijack_print required', 'WarningMsg' } }, true, {})
-local HIJACKPRINT = 'HijackPrint'
+local PLUGIN_NAME = 'HijackPrint'
 if not vim.g.hijack_print_orig_print then vim.g.hijack_print_orig_print = print end
 if not vim.g.HIJACKPRINT_SETTINGS then
 	vim.g.HIJACKPRINT_SETTINGS = {
@@ -50,7 +50,7 @@ local function find_hijack_buf()
 	end
 	if not hibufinfo then
 		for _, bufinfo in pairs(vim.fn.getbufinfo { bufloaded = 1 }) do
-			if bufinfo.name and bufinfo.name:find(HIJACKPRINT .. '$') then
+			if bufinfo.name and bufinfo.name:find(PLUGIN_NAME .. '$') then
 				hijack_bufnr = bufinfo.bufnr
 				hibufinfo = bufinfo
 				break
@@ -61,8 +61,8 @@ local function find_hijack_buf()
 end
 
 local function write_to_buf(lines, overwrite, prepend)
-	local bufinfo = find_hijack_buf()
 	vim.schedule(function()
+		local bufinfo = find_hijack_buf()
 		a.nvim_buf_set_lines(
 			hijack_bufnr,
 			(overwrite or prepend) and 0 or -1,
@@ -88,7 +88,7 @@ local _print = function(both, overwrite, prepend, pause)
 		if limit_reached then return end
 		if not limit_reached and line_count >= vim.g.HIJACKPRINT_SETTINGS.line_limit then
 			limit_reached = true
-			local msg = ('%s LINE LIMIT REACHED, NO LONGER PRINTTING TO BUFFER'):format(string.upper(HIJACKPRINT))
+			local msg = ('%s LINE LIMIT REACHED, NO LONGER PRINTTING TO BUFFER'):format(string.upper(PLUGIN_NAME))
 			a.nvim_echo({ { msg, 'WarningMsg' } }, true, {})
 			write_to_buf({ msg }, overwrite, prepend)
 			return
@@ -100,7 +100,7 @@ local _print = function(both, overwrite, prepend, pause)
 			if type(cur_arg) == 'string' then
 				vim.list_extend(lines, vim.split(cur_arg, '\n'))
 			else
-				vim.list_extend(lines, vim.split(vim.inspect(select(i, ...)), '\n'))
+				vim.list_extend(lines, vim.split(vim.inspect(cur_arg), '\n'))
 			end
 			-- a.nvim_echo({ { 'split: ' .. vim.split(vim.inspect(select(i, ...)), '\n')[1], 'WarningMsg' } }, true, {})
 			-- vim.list_extend(lines, {vim.inspect(select(i, ...))})
@@ -132,13 +132,16 @@ end
 -- end
 
 local function show_state()
-	local state = ('%s State = %s'):format(HIJACKPRINT, vim.inspect(
-		vim.tbl_deep_extend(
-			'keep',
-			{ hijack_bufnr = hijack_bufnr, line_count = line_count, limit_reached = limit_reached },
-			vim.g.HIJACKPRINT_SETTINGS
+	local state = ('%s State = %s'):format(
+		PLUGIN_NAME,
+		vim.inspect(
+			vim.tbl_deep_extend(
+				'keep',
+				{ hijack_bufnr = hijack_bufnr, line_count = line_count, limit_reached = limit_reached },
+				vim.g.HIJACKPRINT_SETTINGS
+			)
 		)
-	))
+	)
 	a.nvim_echo({ { state, 'Type' } }, true, {})
 	write_to_buf(vim.split(state, '\n'), false, vim.g.HIJACKPRINT_SETTINGS.prepend)
 end
@@ -158,13 +161,13 @@ local function save_current_window_size()
 		set_global_dictionary_item('height', height)
 		a.nvim_echo({
 			{
-				('Saving width: %d and height: %d for next time %s is opened.'):format(width, height, HIJACKPRINT),
+				('Saving width: %d and height: %d for next time %s is opened.'):format(width, height, PLUGIN_NAME),
 				'WarningMsg',
 			},
 		}, false, {})
 	else
 		a.nvim_echo(
-			{ { ('%s not currently open to get the height and width from.'):format(HIJACKPRINT), 'WarningMsg' } },
+			{ { ('%s not currently open to get the height and width from.'):format(PLUGIN_NAME), 'WarningMsg' } },
 			false,
 			{}
 		)
@@ -185,8 +188,8 @@ local function set_print(opts)
 end
 
 local function hijack()
-	hijack_bufnr = scratch(HIJACKPRINT, { wipe = false, listed = false, open = false })
-	vim.bo[hijack_bufnr].filetype = HIJACKPRINT
+	hijack_bufnr = scratch(PLUGIN_NAME, { wipe = false, listed = false, open = false })
+	vim.bo[hijack_bufnr].filetype = PLUGIN_NAME
 	if vim.g.HIJACKPRINT_SETTINGS.copy_msg_history then
 		local messages = vim.split(vim.fn.execute 'messages', '\n')
 		vim.api.nvim_buf_set_lines(hijack_bufnr, 0, 0, false, messages)
@@ -207,18 +210,16 @@ local function resume()
 	if print == paused then set_print { pause = false } end
 end
 
-local function switch_to_prepend(prepend)
-	set_print { prepend = prepend }
-end
+local function switch_to_prepend(prepend) set_print { prepend = prepend } end
 
 local function set_line_limit()
 	vim.ui.input(
-		{ prompt = ('Enter the maximum # of lines %s should print before haulting: '):format(HIJACKPRINT) },
+		{ prompt = ('Enter the maximum # of lines %s should print before haulting: '):format(PLUGIN_NAME) },
 		function(input)
 			if input and input ~= '' and not input:find '%D' then
 				set_global_dictionary_item('line_limit', tonumber(input))
 			else
-				a.nvim_echo({ { ('%s line limit must be a number'):format(HIJACKPRINT), 'WarningMsg' } }, true, {})
+				a.nvim_echo({ { ('%s line limit must be a number'):format(PLUGIN_NAME), 'WarningMsg' } }, true, {})
 			end
 		end
 	)
@@ -282,7 +283,7 @@ local function revert()
 	print = vim.g.hijack_print_orig_print
 end
 
-a.nvim_create_user_command(HIJACKPRINT, function(info)
+a.nvim_create_user_command(PLUGIN_NAME, function(info)
 	if #info.fargs == 0 then
 		open()
 	elseif info.fargs[1] == 'revert' then
@@ -357,5 +358,20 @@ end, {
 
 	desc = 'Make `print` output to a regular buffer.',
 })
-
--- vim.cmd('HijackPrint open right')
+a.nvim_create_autocmd('FileType', {
+	group = a.nvim_create_augroup(PLUGIN_NAME, { clear = true }),
+	desc = ('Add `q` keymap to close/hide and `backspace` keymap to clear the %s window/buffer'):format(PLUGIN_NAME),
+	pattern = ('%s'):format(PLUGIN_NAME),
+	callback = function()
+		vim.keymap.set('n', 'q', function()
+			if #vim.api.nvim_list_wins() > 1 then
+				vim.api.nvim_win_close(0, false)
+			elseif vim.fn.bufloaded(0) ~= 0 then
+				a.nvim_feedkeys(a.nvim_replace_termcodes("<C-^>", true, false, true), 'n', false)
+			else
+				vim.cmd.bnext()
+			end
+		end, { buffer = true, desc = 'Quit (close or hide window or buffer)' })
+		vim.keymap.set('n', '<BS>', clear, { buffer = true, desc = 'Clear buffer (i.e. delete all lines)' })
+	end,
+})
