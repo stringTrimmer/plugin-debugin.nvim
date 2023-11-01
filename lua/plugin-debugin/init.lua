@@ -1,3 +1,5 @@
+--TODO: when plugin-debugin is only window, can't close it, so try going to alt file or next buf instead
+--TODO: `open` left (or right) should take up all vertical space I think
 local a = vim.api
 -- a.nvim_echo({ { 'hijack_print required', 'WarningMsg' } }, true, {})
 local PLUGIN_NAME = 'HijackPrint'
@@ -146,13 +148,21 @@ local function show_state()
 	write_to_buf(vim.split(state, '\n'), false, vim.g.HIJACKPRINT_SETTINGS.prepend)
 end
 
+local function get_first_window()
+	local winid
+	local bufinfo = find_hijack_buf()
+	if bufinfo and bufinfo.windows and #bufinfo.windows > 0 then winid = bufinfo.windows[1] end
+	return winid
+end
+
+local function is_open() return get_first_window() ~= nil end
+
 local function save_current_window_size()
 	local winid
 	if hijack_bufnr == a.nvim_get_current_buf() then
 		winid = a.nvim_get_current_win()
 	else
-		local bufinfo = find_hijack_buf()
-		if bufinfo and bufinfo.windows and #bufinfo.windows > 0 then winid = bufinfo.windows[1] end
+		winid = get_first_window()
 	end
 	if winid then
 		local width = a.nvim_win_get_width(winid)
@@ -271,6 +281,15 @@ local function open(position)
 	-- capture_resize(winid, wintype)
 end
 
+local function toggle()
+	if is_open() then
+		close()
+		vim.cmd('echo " "')
+	else
+		open()
+	end
+end
+
 local function clear()
 	if hijacked() then a.nvim_buf_set_lines(hijack_bufnr, 0, -1, false, {}) end
 	line_count = 0
@@ -288,15 +307,17 @@ a.nvim_create_user_command(PLUGIN_NAME, function(info)
 		open()
 	elseif info.fargs[1] == 'revert' then
 		revert()
-	elseif info.fargs[1] == 'c - clear' or info.fargs[1] == 'c' then
+	elseif info.fargs[1] == 't - toggle' or info.fargs[1] == 't' or info.fargs[1] == 'toggle' then
+		toggle()
+	elseif info.fargs[1] == 'c - clear' or info.fargs[1] == 'c' or info.fargs[1] == 'clear' then
 		clear()
-	elseif info.fargs[1] == 'o - open' or info.fargs[1] == 'o' then
+	elseif info.fargs[1] == 'o - open' or info.fargs[1] == 'o' or info.fargs[1] == 'open' then
 		open(info.fargs[2])
-	elseif info.fargs[1] == 'x - close' or info.fargs[1] == 'x' or info.fargs[1] == 'q' then
+	elseif info.fargs[1] == 'q - close/quit' or info.fargs[1] == 'q' or info.fargs[1] == 'close' or info.fargs[1] == 'quit' then
 		close()
-	elseif info.fargs[1] == 'p - pause' or info.fargs[1] == 'p' then
+	elseif info.fargs[1] == 'p - pause' or info.fargs[1] == 'p' or info.fargs[1] == 'pause' then
 		pause()
-	elseif info.fargs[1] == 'r - resume' or info.fargs[1] == 'r' then
+	elseif info.fargs[1] == 'r - resume' or info.fargs[1] == 'r' or info.fargs[1] == 'resume' then
 		resume()
 	elseif info.fargs[1] == 'also print to messages?' then
 		set_print { also_print_to_messages = info.fargs[2] == 'yes' }
@@ -327,6 +348,7 @@ end, {
 		local args_so_far = vim.split(cmd_line, ' ', { plain = true, trimempty = true })
 		if #args_so_far == 1 then
 			return {
+				't - toggle',
 				'o - open',
 				'c - clear',
 				'x - close',
@@ -355,7 +377,6 @@ end, {
 			end
 		end
 	end,
-
 	desc = 'Make `print` output to a regular buffer.',
 })
 a.nvim_create_autocmd('FileType', {
@@ -367,7 +388,7 @@ a.nvim_create_autocmd('FileType', {
 			if #vim.api.nvim_list_wins() > 1 then
 				vim.api.nvim_win_close(0, false)
 			elseif vim.fn.bufloaded(0) ~= 0 then
-				a.nvim_feedkeys(a.nvim_replace_termcodes("<C-^>", true, false, true), 'n', false)
+				a.nvim_feedkeys(a.nvim_replace_termcodes('<C-^>', true, false, true), 'n', false)
 			else
 				vim.cmd.bnext()
 			end
