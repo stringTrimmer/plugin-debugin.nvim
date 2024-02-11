@@ -13,6 +13,8 @@ if not vim.g.HIJACKPRINT_SETTINGS then
 		prepend = true,
 		line_limit = 10000,
 		copy_msg_history = true,
+		separator = '-',
+		width = 10,
 	}
 end
 
@@ -47,6 +49,7 @@ local function hijacked() return hijack_bufnr and a.nvim_buf_is_loaded(hijack_bu
 local function find_hijack_buf()
 	local hibufinfo
 	if hijacked() then
+		-- TODO: can probably just use vim.fn.win_findbuf() if all we need is the windows
 		local buflist = vim.fn.getbufinfo(hijack_bufnr)
 		if #buflist == 1 then hibufinfo = buflist[1] end
 	end
@@ -82,7 +85,7 @@ end
 
 local function paused() end
 
-local _print = function(both, overwrite, prepend, pause)
+local _print = function(both, overwrite, separator, prepend, pause)
 	if pause then return paused end
 
 	return function(...)
@@ -107,6 +110,9 @@ local _print = function(both, overwrite, prepend, pause)
 			-- a.nvim_echo({ { 'split: ' .. vim.split(vim.inspect(select(i, ...)), '\n')[1], 'WarningMsg' } }, true, {})
 			-- vim.list_extend(lines, {vim.inspect(select(i, ...))})
 			-- table.insert(lines, vim.inspect(select(i, ...)))
+		end
+		if type(separator) == 'string' and separator:len() > 0 then
+			vim.list_extend(lines, {string.rep(separator, vim.g.HIJACKPRINT_SETTINGS.width)})
 		end
 		line_count = line_count + #lines
 		write_to_buf(lines, overwrite, prepend)
@@ -189,12 +195,13 @@ local function set_print(opts)
 		also_print_to_messages = vim.g.HIJACKPRINT_SETTINGS.also_print_to_messages,
 		overwrite = vim.g.HIJACKPRINT_SETTINGS.overwrite,
 		prepend = vim.g.HIJACKPRINT_SETTINGS.prepend,
+		separator = vim.g.HIJACKPRINT_SETTINGS.separator,
 	})
 	-- pause should not be persisted
 	local pause = opts.pause or false
 	opts.pause = nil
 	vim.g.HIJACKPRINT_SETTINGS = vim.tbl_extend('keep', opts, vim.g.HIJACKPRINT_SETTINGS)
-	if hijacked() then print = _print(opts.also_print_to_messages, opts.overwrite, opts.prepend, pause) end
+	if hijacked() then print = _print(opts.also_print_to_messages, opts.overwrite, opts.separator, opts.prepend, pause) end
 end
 
 local function hijack()
@@ -235,6 +242,24 @@ local function set_line_limit()
 	)
 end
 
+local function set_separator()
+	vim.ui.input(
+		{ prompt = ('Enter a character for %s to print as a separator between messages: '):format(PLUGIN_NAME) },
+		function(input)
+			if type(input) == 'string' and vim.fn.strchars(input) == 1 then
+				set_global_dictionary_item('separator', input)
+				set_print()
+			else
+				a.nvim_echo(
+					{ { ('%s separator must be a single character'):format(PLUGIN_NAME), 'WarningMsg' } },
+					true,
+					{}
+				)
+			end
+		end
+	)
+end
+
 local function close()
 	local bufinfo = find_hijack_buf()
 	if bufinfo and bufinfo.windows then close_all(bufinfo.windows) end
@@ -259,10 +284,10 @@ local function open(position)
 	set_global_dictionary_item('position', position)
 	local wintype
 	if position == 'right' then
-		vim.cmd('vertical rightbelow sbuffer ' .. hijack_bufnr)
+		vim.cmd('vertical botright sbuffer ' .. hijack_bufnr)
 		wintype = 'vertical'
 	elseif position == 'left' then
-		vim.cmd('vertical leftabove sbuffer ' .. hijack_bufnr)
+		vim.cmd('vertical topleft sbuffer ' .. hijack_bufnr)
 		wintype = 'vertical'
 	elseif position == 'bottom' then
 		vim.cmd('botright sbuffer ' .. hijack_bufnr)
@@ -309,11 +334,11 @@ a.nvim_create_user_command(PLUGIN_NAME, function(info)
 		revert()
 	elseif info.fargs[1] == 't - toggle' or info.fargs[1] == 't' or info.fargs[1] == 'toggle' then
 		toggle()
-	elseif info.fargs[1] == 'c - clear' or info.fargs[1] == 'c' or info.fargs[1] == 'clear' then
+	elseif info.fargs[1] == 'c - clear' or info.fargs[1] == 'c' or info.fargs[1] == 'clear' then
 		clear()
-	elseif info.fargs[1] == 'o - open' or info.fargs[1] == 'o' or info.fargs[1] == 'open' then
+	elseif info.fargs[1] == 'o - open' or info.fargs[1] == 'o' or info.fargs[1] == 'open' then
 		open(info.fargs[2])
-	elseif info.fargs[1] == 'q - close/quit' or info.fargs[1] == 'q' or info.fargs[1] == 'close' or info.fargs[1] == 'quit' then
+	elseif info.fargs[1] == 'q - quit/close' or info.fargs[1] == 'q' or info.fargs[1] == 'close' or info.fargs[1] == 'quit' then
 		close()
 	elseif info.fargs[1] == 'p - pause' or info.fargs[1] == 'p' or info.fargs[1] == 'pause' then
 		pause()
@@ -331,6 +356,8 @@ a.nvim_create_user_command(PLUGIN_NAME, function(info)
 		set_global_dictionary_item('copy_msg_history', info.fargs[2] == 'yes')
 	elseif info.fargs[1] == 'set line limit' then
 		set_line_limit()
+	elseif info.fargs[1] == 'enter message separator character' then
+		set_separator()
 	elseif info.fargs[1] == 'prepend?' then
 		switch_to_prepend(info.fargs[2] == 'yes')
 	elseif info.fargs[1] == 'show state' then
@@ -349,9 +376,9 @@ end, {
 		if #args_so_far == 1 then
 			return {
 				't - toggle',
-				'o - open',
-				'c - clear',
-				'x - close',
+				'o - open',
+				'c - clear',
+				'q - quit/close',
 				print == paused and 'r - resume' or 'p - pause',
 				'revert',
 				'overwrite?',
@@ -361,10 +388,11 @@ end, {
 				'focus window on open?',
 				'include existing message history on initial open?',
 				'set line limit',
+				'enter message separator character',
 				'show state',
 			}
 		elseif #args_so_far == 2 then
-			if args_so_far[2] == 'open' or args_so_far[2] == 'o' then
+			if args_so_far[2] == 'o - open' or args_so_far[2] == 'o' or args_so_far[2] == 'open' then
 				return { 'current', 'right', 'bottom', 'left' }
 			elseif
 				args_so_far[2] == 'also print to messages?'
