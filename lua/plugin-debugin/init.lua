@@ -15,12 +15,14 @@ if not vim.g.HIJACKPRINT_SETTINGS then
 		copy_msg_history = true,
 		separator = '-',
 		width = 10,
+		persist = false,
 	}
 end
 
 local hijack_bufnr
 local line_count = 0
 local limit_reached = false
+local adjusted_win_width
 
 ---Reference: :help lua-vim-variables
 ---@param key any
@@ -112,7 +114,10 @@ local _print = function(both, overwrite, separator, prepend, pause)
 			-- table.insert(lines, vim.inspect(select(i, ...)))
 		end
 		if type(separator) == 'string' and separator:len() > 0 then
-			vim.list_extend(lines, {string.rep(separator, vim.g.HIJACKPRINT_SETTINGS.width)})
+			vim.list_extend(
+				lines,
+				{ string.rep(separator, adjusted_win_width and adjusted_win_width or vim.g.HIJACKPRINT_SETTINGS.width-4) }
+			)
 		end
 		line_count = line_count + #lines
 		write_to_buf(lines, overwrite, prepend)
@@ -201,7 +206,9 @@ local function set_print(opts)
 	local pause = opts.pause or false
 	opts.pause = nil
 	vim.g.HIJACKPRINT_SETTINGS = vim.tbl_extend('keep', opts, vim.g.HIJACKPRINT_SETTINGS)
-	if hijacked() then print = _print(opts.also_print_to_messages, opts.overwrite, opts.separator, opts.prepend, pause) end
+	if hijacked() then
+		print = _print(opts.also_print_to_messages, opts.overwrite, opts.separator, opts.prepend, pause)
+	end
 end
 
 local function hijack()
@@ -302,6 +309,9 @@ local function open(position)
 	elseif wintype == 'horizontal' then
 		if vim.g.HIJACKPRINT_SETTINGS.height then a.nvim_win_set_width(winid, vim.g.HIJACKPRINT_SETTINGS.height) end
 	end
+	local wininfo = vim.fn.getwininfo(winid)[1]
+	---@diagnostic disable-next-line: undefined-field
+	adjusted_win_width = wininfo.width - wininfo.textoff
 	if wintype ~= 'current' and not vim.g.HIJACKPRINT_SETTINGS.focus_window_on_open then vim.cmd.wincmd 'p' end
 	-- capture_resize(winid, wintype)
 end
@@ -309,7 +319,7 @@ end
 local function toggle()
 	if is_open() then
 		close()
-		vim.cmd('echo " "')
+		vim.cmd 'echo " "'
 	else
 		open()
 	end
@@ -338,7 +348,12 @@ a.nvim_create_user_command(PLUGIN_NAME, function(info)
 		clear()
 	elseif info.fargs[1] == 'o - open' or info.fargs[1] == 'o' or info.fargs[1] == 'open' then
 		open(info.fargs[2])
-	elseif info.fargs[1] == 'q - quit/close' or info.fargs[1] == 'q' or info.fargs[1] == 'close' or info.fargs[1] == 'quit' then
+	elseif
+		info.fargs[1] == 'q - quit/close'
+		or info.fargs[1] == 'q'
+		or info.fargs[1] == 'close'
+		or info.fargs[1] == 'quit'
+	then
 		close()
 	elseif info.fargs[1] == 'p - pause' or info.fargs[1] == 'p' or info.fargs[1] == 'pause' then
 		pause()
@@ -352,6 +367,8 @@ a.nvim_create_user_command(PLUGIN_NAME, function(info)
 		save_current_window_size()
 	elseif info.fargs[1] == 'focus window on open?' then
 		set_global_dictionary_item('focus_window_on_open', info.fargs[2] == 'yes')
+	elseif info.fargs[1] == 'persist?' then
+		set_global_dictionary_item('persist', info.fargs[2] == 'yes')
 	elseif info.fargs[1] == 'include existing message history on initial open?' then
 		set_global_dictionary_item('copy_msg_history', info.fargs[2] == 'yes')
 	elseif info.fargs[1] == 'set line limit' then
@@ -383,6 +400,7 @@ end, {
 				'revert',
 				'overwrite?',
 				'prepend?',
+				'persist?',
 				'also print to messages?',
 				'save current window size',
 				'focus window on open?',
@@ -400,6 +418,7 @@ end, {
 				or args_so_far[2] == 'prepend?'
 				or args_so_far[2] == 'focus window on open?'
 				or args_so_far[2] == 'include existing message history on initial open?'
+				or args_so_far[2] == 'persist?'
 			then
 				return { 'yes', 'no' }
 			end
@@ -407,8 +426,9 @@ end, {
 	end,
 	desc = 'Make `print` output to a regular buffer.',
 })
+local autocmd_group = a.nvim_create_augroup(PLUGIN_NAME, { clear = true })
 a.nvim_create_autocmd('FileType', {
-	group = a.nvim_create_augroup(PLUGIN_NAME, { clear = true }),
+	group = autocmd_group,
 	desc = ('Add `q` keymap to close/hide and `backspace` keymap to clear the %s window/buffer'):format(PLUGIN_NAME),
 	pattern = ('%s'):format(PLUGIN_NAME),
 	callback = function()
@@ -422,5 +442,17 @@ a.nvim_create_autocmd('FileType', {
 			end
 		end, { buffer = true, desc = 'Quit (close or hide window or buffer)' })
 		vim.keymap.set('n', '<BS>', clear, { buffer = true, desc = 'Clear buffer (i.e. delete all lines)' })
+	end,
+})
+
+a.nvim_create_autocmd('VimLeave', {
+	group = autocmd_group,
+	desc = ('Write %s buffer to a file if `persist` option is true'):format(PLUGIN_NAME),
+	callback = function()
+		if vim.g.HIJACKPRINT_SETTINGS.persist and hijacked() then
+			a.nvim_set_current_buf(hijack_bufnr)
+			vim.bo[hijack_bufnr].buftype = ''
+			vim.cmd.saveas { vim.fs.normalize(('%s/%s.log'):format(vim.fn.stdpath 'log', PLUGIN_NAME)), bang = true }
+		end
 	end,
 })
