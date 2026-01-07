@@ -1,14 +1,14 @@
 local a = vim.api
 local cmd = vim.cmd
 local fn = vim.fn
-local consts = require 'plugin-debugin.consts'
-local PLUGIN_NAME_UPPER = string.upper(consts.PLUGIN_NAME) -- lol, naming. i can't even name the plugin
-local ORIGINAL_PRINT = consts.PLUGIN_NAME .. '_orig_print'
+PLUGIN_NAME = 'PluginDebugin'
+local PLUGIN_NAME_UPPER = string.upper(PLUGIN_NAME) -- lol, naming. i can't even name the plugin
+local ORIGINAL_PRINT = PLUGIN_NAME .. '_orig_print'
 local plugin_bufnr
 local line_count = 0
 local limit_reached = false
 local adjusted_win_width
-local autocmd_group = a.nvim_create_augroup(consts.PLUGIN_NAME, { clear = true })
+local autocmd_group = a.nvim_create_augroup(PLUGIN_NAME, { clear = true })
 
 ---@alias plugin_debugin.window_position 'bottom' | 'left' | 'right' | 'current'
 
@@ -64,7 +64,7 @@ else
 	}
 	if vim.v.vim_did_enter ~= 1 then
 		a.nvim_create_autocmd('VimEnter', {
-			desc = ('Get %s settings from SHADA'):format(consts.PLUGIN_NAME),
+			desc = ('Get %s settings from SHADA'):format(PLUGIN_NAME),
 			group = autocmd_group,
 			callback = function()
 				if vim.g[PLUGIN_NAME_UPPER] then settings = vim.g[PLUGIN_NAME_UPPER] end
@@ -94,7 +94,7 @@ local function get_windows()
 		if #winlist > 0 then return winlist end
 	end
 	for _, bufinfo in pairs(fn.getbufinfo { bufloaded = 1 }) do
-		if bufinfo.name and bufinfo.name:find(consts.PLUGIN_NAME .. '$') then
+		if bufinfo.name and bufinfo.name:find(PLUGIN_NAME .. '$') then
 			plugin_bufnr = bufinfo.bufnr
 			return bufinfo.windows
 		end
@@ -136,7 +136,7 @@ local function print_to_buf(...)
 
 	if line_count >= settings.line_limit then
 		limit_reached = true
-		local msg = ('%s line limit reached, no longer printting to buffer'):format(consts.PLUGIN_NAME)
+		local msg = ('%s line limit reached, no longer printting to buffer'):format(PLUGIN_NAME)
 		a.nvim_echo({ { msg, 'WarningMsg' } }, true, {})
 		write_to_buf_fun({ msg }, settings.overwrite, settings.prepend)
 		return
@@ -178,7 +178,7 @@ function M.is_enabled() return is_enabled() end
 
 function M.show_state()
 	local state = ('%s State = %s'):format(
-		consts.PLUGIN_NAME,
+		PLUGIN_NAME,
 		vim.inspect(vim.tbl_deep_extend('keep', {
 			plugin_bufnr = plugin_bufnr,
 			line_count = line_count,
@@ -205,14 +205,14 @@ function M.save_current_window_size()
 				('Saving width: %d and height: %d for next time %s is opened.'):format(
 					settings.width,
 					settings.height,
-					consts.PLUGIN_NAME
+					PLUGIN_NAME
 				),
 				'WarningMsg',
 			},
 		}, false, {})
 	else
 		a.nvim_echo(
-			{ { ('%s not currently open to get the height and width from.'):format(consts.PLUGIN_NAME), 'WarningMsg' } },
+			{ { ('%s not currently open to get the height and width from.'):format(PLUGIN_NAME), 'WarningMsg' } },
 			false,
 			{}
 		)
@@ -228,8 +228,8 @@ end
 local function get_message_history() return vim.split(a.nvim_cmd({ cmd = 'messages' }, { output = true }), '\n') end
 
 function M.enable()
-	plugin_bufnr = scratch(consts.PLUGIN_NAME)
-	vim.bo[plugin_bufnr].filetype = consts.PLUGIN_NAME
+	plugin_bufnr = scratch(PLUGIN_NAME)
+	vim.bo[plugin_bufnr].filetype = PLUGIN_NAME
 	if settings.copy_msg_history then vim.api.nvim_buf_set_lines(plugin_bufnr, 0, 0, false, get_message_history()) end
 	set_print()
 end
@@ -242,13 +242,13 @@ function M.resume() set_print(false) end
 
 function M.prompt_for_line_limit()
 	vim.ui.input(
-		{ prompt = ('Enter the maximum # of lines %s should print before haulting: '):format(consts.PLUGIN_NAME) },
+		{ prompt = ('Enter the maximum # of lines %s should print before haulting: '):format(PLUGIN_NAME) },
 		function(input)
 			if input and input ~= '' and not input:find '%D' then
 				settings.line_limit = tonumber(input)
 			else
 				a.nvim_echo(
-					{ { ('%s line limit must be a number'):format(consts.PLUGIN_NAME), 'WarningMsg' } },
+					{ { ('%s line limit must be a number'):format(PLUGIN_NAME), 'WarningMsg' } },
 					true,
 					{}
 				)
@@ -260,13 +260,13 @@ end
 -- TODO: support setting no separator
 function M.prompt_for_msg_separator()
 	vim.ui.input(
-		{ prompt = ('Enter a character for %s to print as a separator between messages: '):format(consts.PLUGIN_NAME) },
+		{ prompt = ('Enter a character for %s to print as a separator between messages: '):format(PLUGIN_NAME) },
 		function(input)
 			if type(input) == 'string' and fn.strchars(input) == 1 then
 				settings.separator = input
 			else
 				a.nvim_echo(
-					{ { ('%s separator must be a single character'):format(consts.PLUGIN_NAME), 'WarningMsg' } },
+					{ { ('%s separator must be a single character'):format(PLUGIN_NAME), 'WarningMsg' } },
 					true,
 					{}
 				)
@@ -357,7 +357,7 @@ function M.change_setting(setting, value)
 end
 
 a.nvim_create_autocmd('VimLeavePre', {
-	desc = ('Persist %s config in shada via all-caps vim global'):format(consts.PLUGIN_NAME),
+	desc = ('Persist %s config in shada via all-caps vim global'):format(PLUGIN_NAME),
 	group = autocmd_group,
 	callback = function()
 		settings.schedule = nil -- don't persist schedule
@@ -367,10 +367,10 @@ a.nvim_create_autocmd('VimLeavePre', {
 
 a.nvim_create_autocmd('FileType', {
 	desc = ('Add `q` keymap to close/hide and `backspace` keymap to clear the %s window/buffer'):format(
-		consts.PLUGIN_NAME
+		PLUGIN_NAME
 	),
 	group = autocmd_group,
-	pattern = ('%s'):format(consts.PLUGIN_NAME),
+	pattern = ('%s'):format(PLUGIN_NAME),
 	callback = function()
 		vim.keymap.set('n', 'q', function()
 			if #vim.api.nvim_list_wins() > 1 then

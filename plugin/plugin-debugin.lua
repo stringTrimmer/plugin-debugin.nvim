@@ -1,5 +1,5 @@
 local a = vim.api
-local consts = require("plugin-debugin.consts")
+local PLUGIN_NAME = 'PluginDebugin'
 
 local function get_subcommands()
 	local pd = require("plugin-debugin")
@@ -25,7 +25,7 @@ local function get_subcommands()
 	}
 end
 
-a.nvim_create_user_command(consts.PLUGIN_NAME, function(info)
+a.nvim_create_user_command(PLUGIN_NAME, function(info)
 	local pd = require("plugin-debugin")
 	if #info.fargs == 0 then
 		pd.open()
