@@ -1,0 +1,14 @@
+{
+	"$schema": "https://raw.githubusercontent.com/LuaLS/vscode-lua/master/setting/schema.json",
+	"Lua.workspace.library": [
+		"C:/Program Files/Neovim/share/nvim/runtime/lua/vim",
+		"C:/Users/turtle/AppData/Local/lua-language-server-addons/busted/library",
+		"C:/Users/turtle/AppData/Local/lua-language-server-addons/luassert/library"
+	],
+	"Lua.workspace.ignoreDir" : [
+		"_*.lua"
+	],
+    "diagnostics.globals": [
+        "vim"
+    ]
+}
